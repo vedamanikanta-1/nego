@@ -715,7 +715,7 @@ function loadPayPalSDK() {
   return new Promise((resolve, reject) => {
     if (window.paypal) return resolve();
     const script = document.createElement("script");
-    script.src = "https://www.paypal.com/sdk/js?client-id=AVUmT4JCxXATegg8Q0RsYVYHI5hDJmur3TtL2HB3ppeqk1K0SC9yV3eOuWxjD0le40BLXyq-JxqbvTcO&currency=USD";
+    script.src = "https://www.paypal.com/sdk/js?client-id=AVUmT4JCxXATegg8Q0RsYVYHI5hDJmur3TtL2HB3ppeqk1K0SC9yV3eOuWxjD0le40BLXyq-JxqbvTcO&currency=USD&buyer-country=IN&locale=en_IN";
     script.onload = resolve;
     script.onerror = reject;
     document.body.appendChild(script);
