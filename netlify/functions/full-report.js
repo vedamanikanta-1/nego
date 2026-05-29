@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -27,9 +27,8 @@ exports.handler = async (event) => {
   }
 
   let body;
-  try {
-    body = JSON.parse(event.body);
-  } catch (e) {
+  try { body = JSON.parse(event.body); }
+  catch (e) {
     return {
       statusCode: 400,
       headers: { "Access-Control-Allow-Origin": "*" },
@@ -40,47 +39,45 @@ exports.handler = async (event) => {
   const { jobTitle, skills, experience, location, currentSalary } = body;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-      }
-    });
+    const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `You are India's top salary negotiation coach.
 
-User Profile:
+Profile:
 - Job Title: ${jobTitle}
 - Skills: ${skills}
 - Experience: ${experience}
 - Location: ${location}
 - Current Salary: ${currentSalary || "Not disclosed"}
 
-Generate complete negotiation report. Return ONLY this JSON:
+Return ONLY valid JSON, no markdown:
 {
   "companyWiseSalaries": [
-    {"company": "Google", "range": "₹XX-XXL", "notes": "brief note"},
-    {"company": "Amazon", "range": "₹XX-XXL", "notes": "brief note"},
-    {"company": "Microsoft", "range": "₹XX-XXL", "notes": "brief note"},
-    {"company": "TCS", "range": "₹XX-XXL", "notes": "brief note"},
-    {"company": "Infosys", "range": "₹XX-XXL", "notes": "brief note"},
-    {"company": "Wipro", "range": "₹XX-XXL", "notes": "brief note"}
+    {"company": "Google", "range": "₹XX-XXL", "notes": "note"},
+    {"company": "Amazon", "range": "₹XX-XXL", "notes": "note"},
+    {"company": "Microsoft", "range": "₹XX-XXL", "notes": "note"},
+    {"company": "TCS", "range": "₹XX-XXL", "notes": "note"},
+    {"company": "Infosys", "range": "₹XX-XXL", "notes": "note"},
+    {"company": "Wipro", "range": "₹XX-XXL", "notes": "note"}
   ],
   "negotiationScript": {
-    "opening": "exact word-for-word opening statement",
-    "whenAsked": "exact response when HR asks expected salary",
+    "opening": "exact opening statement",
+    "whenAsked": "exact response when HR asks salary",
     "counterOffer": "exact counter offer script",
     "closing": "exact closing statement"
   },
-  "offerEvaluation": "evaluation of current salary vs market",
-  "actionPlan": ["action1", "action2", "action3"],
-  "redFlags": ["flag1", "flag2"],
-  "skillsToAdd": ["skill with salary increase percentage"]
+  "offerEvaluation": "is current salary fair/underpaid/overpaid",
+  "actionPlan": ["step1","step2","step3"],
+  "redFlags": ["flag1","flag2"],
+  "skillsToAdd": ["skill with % increase"]
 }`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    const text = response.text;
     const cleaned = text.replace(/```json|```/g, "").trim();
     const data = JSON.parse(cleaned);
 
