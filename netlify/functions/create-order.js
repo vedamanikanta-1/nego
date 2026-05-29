@@ -18,44 +18,62 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: "PayPal credentials not found" }),
+      body: JSON.stringify({ 
+        error: "PayPal credentials missing",
+        hasClientId: !!clientId,
+        hasSecret: !!secret
+      }),
     };
   }
 
   try {
-    const authResponse = await fetch(
+    // Step 1: Get access token
+    const authString = Buffer.from(clientId + ":" + secret).toString("base64");
+    
+    const authRes = await fetch(
       "https://api-m.sandbox.paypal.com/v1/oauth2/token",
       {
         method: "POST",
         headers: {
+          "Authorization": "Basic " + authString,
           "Content-Type": "application/x-www-form-urlencoded",
-          Authorization:
-            "Basic " +
-            Buffer.from(clientId + ":" + secret).toString("base64"),
         },
         body: "grant_type=client_credentials",
       }
     );
-    const authData = await authResponse.json();
+
+    const authText = await authRes.text();
+    let authData;
+    try {
+      authData = JSON.parse(authText);
+    } catch(e) {
+      return {
+        statusCode: 500,
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: "PayPal auth parse failed: " + authText }),
+      };
+    }
 
     if (!authData.access_token) {
       return {
         statusCode: 500,
         headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({
-          error: "PayPal auth failed",
+        body: JSON.stringify({ 
+          error: "No access token from PayPal",
           details: authData
         }),
       };
     }
 
-    const orderResponse = await fetch(
+    // Step 2: Create order
+    const orderRes = await fetch(
       "https://api-m.sandbox.paypal.com/v2/checkout/orders",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Bearer " + authData.access_token,
+          "Authorization": "Bearer " + authData.access_token,
+          "PayPal-Request-Id": "negotiateai-" + Date.now(),
         },
         body: JSON.stringify({
           intent: "CAPTURE",
@@ -64,22 +82,4 @@ exports.handler = async (event) => {
               currency_code: "USD",
               value: "2.40",
             },
-            description: "NegotiateAI Full Report",
-          }],
-        }),
-      }
-    );
-    const orderData = await orderResponse.json();
-    return {
-      statusCode: 200,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ orderID: orderData.id }),
-    };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: err.message }),
-    };
-  }
-};
+            description: "NegotiateAI
