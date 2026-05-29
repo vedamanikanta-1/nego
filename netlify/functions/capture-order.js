@@ -13,11 +13,9 @@ exports.handler = async (event) => {
 
   const clientId = process.env.PAYPAL_CLIENT_ID;
   const secret = process.env.PAYPAL_SECRET;
-
   const { orderID } = JSON.parse(event.body);
 
   try {
-    // Get access token
     const authResponse = await fetch(
       "https://api-m.sandbox.paypal.com/v1/oauth2/token",
       {
@@ -34,7 +32,6 @@ exports.handler = async (event) => {
     const authData = await authResponse.json();
     const accessToken = authData.access_token;
 
-    // Capture payment
     const captureResponse = await fetch(
       `https://api-m.sandbox.paypal.com/v2/checkout/orders/${orderID}/capture`,
       {
@@ -57,7 +54,10 @@ exports.handler = async (event) => {
       return {
         statusCode: 400,
         headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ error: "Payment not completed" }),
+        body: JSON.stringify({
+          error: "Payment not completed",
+          details: captureData
+        }),
       };
     }
   } catch (err) {
