@@ -676,28 +676,42 @@ async function unlockReport() {
 
     paypal.Buttons({
       createOrder: async () => {
-        const res = await fetch("/api/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        const data = await res.json();
-        return data.orderID;
+        try {
+          const res = await fetch("/.netlify/functions/create-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const data = await res.json();
+          console.log("Order data:", data);
+          if (!data.orderID) throw new Error("No order ID: " + JSON.stringify(data));
+          return data.orderID;
+        } catch (err) {
+          console.error("Create order error:", err);
+          throw err;
+        }
       },
       onApprove: async (data) => {
-        const res = await fetch("/api/capture-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderID: data.orderID }),
-        });
-        const result = await res.json();
-        if (result.success) {
-          document.getElementById("paypal-container").style.display = "none";
-          await generateFullReport();
+        try {
+          const res = await fetch("/.netlify/functions/capture-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderID: data.orderID }),
+          });
+          const result = await res.json();
+          if (result.success) {
+            document.getElementById("paypal-container").style.display = "none";
+            await generateFullReport();
+          } else {
+            alert("Payment capture failed: " + JSON.stringify(result));
+          }
+        } catch (err) {
+          alert("Capture error: " + err.message);
         }
       },
       onError: (err) => {
-        alert("Payment failed: " + err);
+        console.error("PayPal error:", err);
+        alert("Payment failed: " + JSON.stringify(err));
         btn.disabled = false;
         btn.textContent = "Unlock Full Report — ₹199 →";
         btn.style.display = "block";
@@ -710,7 +724,6 @@ async function unlockReport() {
     btn.textContent = "Unlock Full Report — ₹199 →";
   }
 }
-
 function loadPayPalSDK() {
   return new Promise((resolve, reject) => {
     if (window.paypal) return resolve();
