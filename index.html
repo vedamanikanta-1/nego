@@ -433,6 +433,7 @@ footer{padding:44px 6% 28px;border-top:1px solid var(--border);}
           <span class="uitem">Skills to add</span>
         </div>
         <button class="unlock-btn" id="unlockBtn" onclick="unlockReport()">Unlock Full Report — ₹199 →</button>
+<div id="paypal-container" style="display:none;margin-top:16px;"></div>
       </div>
 
       <!-- FULL REPORT (shown after payment simulation) -->
@@ -663,30 +664,73 @@ function showError(msg){
 }
 
 // UNLOCK FULL REPORT
-async function unlockReport(){
-  const btn=document.getElementById('unlockBtn');
-  btn.disabled=true;btn.textContent='Generating...';
+async function unlockReport() {
+  const btn = document.getElementById("unlockBtn");
+  btn.disabled = true;
+  btn.textContent = "Loading PayPal...";
 
-  // TODO: Replace this with real Razorpay payment check
-  // For now: simulate payment success for testing
-  const paid=confirm('DEMO MODE: In production, Razorpay payment of ₹199 happens here.\n\nClick OK to simulate successful payment and see full report.');
-  if(!paid){btn.disabled=false;btn.textContent='Unlock Full Report — ₹199 →';return;}
+  try {
+    await loadPayPalSDK();
+    document.getElementById("paypal-container").style.display = "block";
+    btn.style.display = "none";
 
-  try{
-    const p=window._userProfile;
-    const res=await fetch(`/.netlify/functions/full-report`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(p)
-    });
-    const json=await res.json();
-    if(!json.success)throw new Error(json.error);
-    showFullReport(json.data);
-    btn.style.display='none';
-  }catch(err){
-    alert('Report generation failed: '+err.message);
-    btn.disabled=false;btn.textContent='Unlock Full Report — ₹199 →';
+    paypal.Buttons({
+      createOrder: async () => {
+        const res = await fetch("/api/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        return data.orderID;
+      },
+      onApprove: async (data) => {
+        const res = await fetch("/api/capture-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderID: data.orderID }),
+        });
+        const result = await res.json();
+        if (result.success) {
+          document.getElementById("paypal-container").style.display = "none";
+          await generateFullReport();
+        }
+      },
+      onError: (err) => {
+        alert("Payment failed: " + err);
+        btn.disabled = false;
+        btn.textContent = "Unlock Full Report — ₹199 →";
+        btn.style.display = "block";
+        document.getElementById("paypal-container").style.display = "none";
+      },
+    }).render("#paypal-container");
+  } catch (err) {
+    alert("PayPal load failed: " + err.message);
+    btn.disabled = false;
+    btn.textContent = "Unlock Full Report — ₹199 →";
   }
+}
+
+function loadPayPalSDK() {
+  return new Promise((resolve, reject) => {
+    if (window.paypal) return resolve();
+    const script = document.createElement("script");
+    script.src = "https://www.paypal.com/sdk/js?client-id=YOUR_PAYPAL_CLIENT_ID&currency=USD";
+    script.onload = resolve;
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+}
+
+async function generateFullReport() {
+  const p = window._userProfile;
+  const res = await fetch("/api/full-report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(p),
+  });
+  const json = await res.json();
+  if (json.success) showFullReport(json.data);
 }
 
 function showFullReport(d){
