@@ -664,6 +664,8 @@ function showError(msg){
 }
 
 // UNLOCK FULL REPORT
+let paypalRendered = false;
+
 async function unlockReport() {
   const btn = document.getElementById("unlockBtn");
   btn.disabled = true;
@@ -671,10 +673,23 @@ async function unlockReport() {
 
   try {
     await loadPayPalSDK();
-    document.getElementById("paypal-container").style.display = "block";
+
+    // Prevent double rendering
+    if (paypalRendered) return;
+    paypalRendered = true;
+
+    const container = document.getElementById("paypal-container");
+    container.innerHTML = ""; // Clear any existing buttons
+    container.style.display = "block";
     btn.style.display = "none";
 
     paypal.Buttons({
+      style: {
+        layout: "vertical",
+        color: "gold",
+        shape: "rect",
+        label: "pay"
+      },
       createOrder: async () => {
         try {
           const res = await fetch("/.netlify/functions/create-order", {
@@ -682,17 +697,26 @@ async function unlockReport() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
           });
-          const data = await res.json();
-          console.log("Order data:", data);
-          if (!data.orderID) throw new Error("No order ID: " + JSON.stringify(data));
+          const text = await res.text();
+          console.log("create-order response:", text);
+          const data = JSON.parse(text);
+          if (!data.orderID) {
+            throw new Error("No orderID: " + text);
+          }
           return data.orderID;
         } catch (err) {
-          console.error("Create order error:", err);
+          console.error("createOrder error:", err);
+          paypalRendered = false;
+          container.style.display = "none";
+          btn.style.display = "block";
+          btn.disabled = false;
+          btn.textContent = "Unlock Full Report — ₹199 →";
           throw err;
         }
       },
       onApprove: async (data) => {
         try {
+          container.innerHTML = '<p style="color:var(--lavender);text-align:center">Processing payment...</p>';
           const res = await fetch("/.netlify/functions/capture-order", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -700,26 +724,40 @@ async function unlockReport() {
           });
           const result = await res.json();
           if (result.success) {
-            document.getElementById("paypal-container").style.display = "none";
+            container.style.display = "none";
             await generateFullReport();
           } else {
-            alert("Payment capture failed: " + JSON.stringify(result));
+            throw new Error(JSON.stringify(result));
           }
         } catch (err) {
-          alert("Capture error: " + err.message);
+          alert("Payment capture failed: " + err.message);
+          paypalRendered = false;
+          container.style.display = "none";
+          btn.style.display = "block";
+          btn.disabled = false;
+          btn.textContent = "Unlock Full Report — ₹199 →";
         }
+      },
+      onCancel: () => {
+        paypalRendered = false;
+        container.style.display = "none";
+        btn.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "Unlock Full Report — ₹199 →";
       },
       onError: (err) => {
         console.error("PayPal error:", err);
-        alert("Payment failed: " + JSON.stringify(err));
+        paypalRendered = false;
+        container.style.display = "none";
+        btn.style.display = "block";
         btn.disabled = false;
         btn.textContent = "Unlock Full Report — ₹199 →";
-        btn.style.display = "block";
-        document.getElementById("paypal-container").style.display = "none";
       },
     }).render("#paypal-container");
+
   } catch (err) {
-    alert("PayPal load failed: " + err.message);
+    console.error("PayPal load error:", err);
+    paypalRendered = false;
     btn.disabled = false;
     btn.textContent = "Unlock Full Report — ₹199 →";
   }
